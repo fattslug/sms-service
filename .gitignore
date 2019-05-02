@@ -1,0 +1,6 @@
+.env
+node_modules/
+app/logs/
+app/sms/
+token.json
+build/
