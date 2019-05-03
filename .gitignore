@@ -1,4 +1,5 @@
 .env
+app/credentials.json
 node_modules/
 app/logs/
 app/sms/
