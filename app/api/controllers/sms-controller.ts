@@ -8,10 +8,25 @@ type ChartCoords = {
   y: number
 }
 
+/** Desired Data Format:
+ * date: {Date},
+ * data: [{
+ *  label: 'Sent',
+ *  value: 100
+ * }, {
+ *  label: 'Received',
+ *  value: 102
+ * }]
+ */
+
+ type Value = {
+   label: string,
+   value: number
+ }
+
 type ChartItem = {
   date: Date,
-  sent?: number,
-  received?: number
+  values?: Value[]
 }
 
 /**
@@ -278,10 +293,17 @@ async function mergeResults(sent: ChartCoords[], received: ChartCoords[]): Promi
     });
     mergedArray.sort((a, b) => a.date.getTime() - b.date.getTime());
     mergedArray.forEach((item) => {
+      item.values = [];
       const sentFiltered = sent.filter((val) => val.x.getTime() === item.date.getTime())[0];
-      item.sent = sentFiltered ? sentFiltered.y : 0;
+      item.values.push({
+        label: 'Sent',
+        value: sentFiltered ? sentFiltered.y : 0
+      });
       const receivedFiltered = received.filter((val) => val.x.getTime() === item.date.getTime())[0];
-      item.received = receivedFiltered ? receivedFiltered.y : 0;
+      item.values.push({
+        label: 'Received',
+        value: receivedFiltered ? receivedFiltered.y : 0
+      });
     });
     resolve(mergedArray);
   });

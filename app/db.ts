@@ -26,11 +26,20 @@ export interface GroupedSMS extends Document {
   _id: {
     month: number,
     day: number,
-    year: number
+    year: number,
+    contact_name?: string
   },
   totalTexts: number,
   from?: boolean,
   to?: boolean,
+}
+
+export interface DBMessage extends Document {
+  _id: any,
+  timestamp: Date,
+  phone_number: string,
+  contact_name: string,
+  sms_body: string
 }
 
 let receivedSchema = new Schema({

@@ -17,55 +17,57 @@ const SCOPES = ['https://www.googleapis.com/auth/drive'];
 // time.
 const TOKEN_PATH = 'token.json';
 
-// Initial reset
-// Remove & create folders...
-// CSV Directory
-const csvDir = __dirname + '/sms/csv';
-if (fs.existsSync(csvDir)) {
-  fs.remove(csvDir).then(() => {
-    log.write('Removed CSV directory...');
-    fs.mkdir(csvDir).then(() => {
-      log.write('Created CSV directory...');
+function resetEnv() {
+  // Initial reset
+  // Remove & create folders...
+  // CSV Directory
+  const csvDir = __dirname + '/sms/csv';
+  if (fs.existsSync(csvDir)) {
+    fs.remove(csvDir).then(() => {
+      log.write('Removed CSV directory...');
+      fs.mkdir(csvDir).then(() => {
+        log.write('Created CSV directory...');
+      }).catch(err => {
+        console.log('Error creating CSV directory: ' + err);
+        log.write('Error creating CSV directory: ' + err);
+      })
     }).catch(err => {
-      console.log('Error creating CSV directory: ' + err);
-      log.write('Error creating CSV directory: ' + err);
-    })
-  }).catch(err => {
-    console.log('Error removing CSV directory!', err);
-    log.write('Error removing CSV directory: ' + err);
+      console.log('Error removing CSV directory!', err);
+      log.write('Error removing CSV directory: ' + err);
+    });
+  }
+
+  // JSON Directory
+  const jsonDir = __dirname + '/sms/json';
+  if (fs.existsSync(jsonDir)) {
+    fs.remove(jsonDir).then(() => {
+      log.write('Removed JSON directory...');
+      fs.mkdir(jsonDir).then(() => {
+        log.write('Created JSON directory...');
+      }).catch(err => {
+        console.log('Error creating JSON directory: ' + err);
+        log.write('Error creating JSON directory: ' + err);
+      })
+    }).catch(err => {
+      console.log('Error removing JSON directory!', err);
+      log.write('Error removing JSON directory: ' + err);
+    });
+  }
+
+  // Wipe database
+  dropCollection(SentSMS).then(() => {
+    log.write('Successfully dropped "sent" collection...');
+  }).catch((err) => {
+    console.log('Error dropping "sent" collection', err);
+    log.write('Error dropping "sent" collection: ' + err);
+  });
+  dropCollection(ReceivedSMS).then(() => {
+    log.write('Successfully dropped "received" collection...');
+  }).catch((err) => {
+    console.log('Error dropping "received" collection', err);
+    log.write('Error dropping "received" collection: ' + err);
   });
 }
-
-// JSON Directory
-const jsonDir = __dirname + '/sms/json';
-if (fs.existsSync(jsonDir)) {
-  fs.remove(jsonDir).then(() => {
-    log.write('Removed JSON directory...');
-    fs.mkdir(jsonDir).then(() => {
-      log.write('Created JSON directory...');
-    }).catch(err => {
-      console.log('Error creating JSON directory: ' + err);
-      log.write('Error creating JSON directory: ' + err);
-    })
-  }).catch(err => {
-    console.log('Error removing JSON directory!', err);
-    log.write('Error removing JSON directory: ' + err);
-  });
-}
-
-// Wipe database
-dropCollection(SentSMS).then(() => {
-  log.write('Successfully dropped "sent" collection...');
-}).catch((err) => {
-  console.log('Error dropping "sent" collection', err);
-  log.write('Error dropping "sent" collection: ' + err);
-});
-dropCollection(ReceivedSMS).then(() => {
-  log.write('Successfully dropped "received" collection...');
-}).catch((err) => {
-  console.log('Error dropping "received" collection', err);
-  log.write('Error dropping "received" collection: ' + err);
-});
 
 
 
@@ -132,8 +134,9 @@ function getAccessToken(oAuth2Client: any, callback: any) {
  * Lists the names and IDs of up to 10 files.
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  */
-function listFiles(auth: any) {
+async function listFiles(auth: any) {
   log.write('Successfully authenticated...');
+  await resetEnv();
   log.write('Listing files from Google Drive...');
   const drive = google.drive({version: 'v3', auth});
   var pageToken: any = null;
