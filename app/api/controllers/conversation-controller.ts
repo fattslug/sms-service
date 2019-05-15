@@ -1,7 +1,8 @@
 'use strict';
 
 import { Response, Request } from 'express';
-import { SentSMS, ReceivedSMS, DBMessage } from '../../db';
+import { SentSMS, ReceivedSMS } from '../../db';
+import { months } from 'moment';
 
 type Message = {
   sent?: boolean,
@@ -11,7 +12,12 @@ type Message = {
 }
 
 type Conversation = {
-  contact: string,
+  _id: {
+    contact_name: string,
+    month?: number,
+    day?: number,
+    year?: number
+  },
   messages: Message[]
 }
 
@@ -41,24 +47,31 @@ export let getDayConversation = async (req: Request, res: Response) => {
       timestamp: 1
     }
   }, {
+    $group: {
+      _id: {
+        contact_name: "$contact_name",
+        month: { $month: "$timestamp" }, day: { $dayOfMonth: "$timestamp" }, year: { $year: "$timestamp" }
+      },
+      messages: { $push: "$$ROOT" }
+    }
+  }, {
     $match: {
-      timestamp: { $gte: startDate, $lte: endDate }
+      '_id.month': month,
+      '_id.day': day,
+      '_id.year': year
     }
   }];
 
   sent = await new Promise((resolve) => {
     SentSMS.aggregate(conversationQuery).exec((err, result) => {
-      parseResult(result).then((parsedResult: Conversation[]) => {
-        return resolve(parsedResult);
-      });
+      // console.log(result);
+      return resolve(result);
     });
   });
 
   received = await new Promise((resolve) => {
     ReceivedSMS.aggregate(conversationQuery).exec((err, result) => {
-      parseResult(result).then((parsedResult: Conversation[]) => {
-        return resolve(parsedResult);
-      });
+      return resolve(result);
     });
   });
 
@@ -69,73 +82,36 @@ export let getDayConversation = async (req: Request, res: Response) => {
   });
 };
 
-async function parseResult(messages: DBMessage[]): Promise<Conversation[]> {
-  return new Promise((resolve) => {
-    let contacts: string[] = [];
-    let conversations: Conversation[] = [];
-    messages.forEach((message) => {
-      const newMessage = {
-        timestamp: message.timestamp,
-        phone_number: message.phone_number,
-        sms_body: message.sms_body
-      }
-      if (!contacts.includes(message.contact_name)) {
-        contacts.push(message.contact_name);
-        conversations.push({
-          contact: message.contact_name,
-          messages: [message]
-        });
-      } else {
-        const foundConvo: Conversation = conversations.find((conv) => conv.contact === message.contact_name) as Conversation;
-        foundConvo.messages.push(newMessage);
-      }
-    });
-
-    resolve(conversations);
-  });
-}
-
 async function mergeResults(sent: Conversation[], received: Conversation[]): Promise<Conversation[]>  {
-  /**
-   * contact: 'Jessica',
-   * messages: [{
-   *  sent: true
-   *  timestamp: Date(),
-   *  phone_number: '6475634524',
-   *  sms_body: 'Test test'
-   * }]
-   */
   let contacts: string[] = [];
-  let conversations: Conversation[] = [];
+  let mergedConversations: Conversation[] = [];
   return new Promise((resolve) => {
-    sent.forEach((conv) => {
-      conv.messages.map((m) => m.sent = true);
-      if (!contacts.includes(conv.contact)) {
-        contacts.push(conv.contact);
-        conversations.push({
-          contact: conv.contact,
-          messages: conv.messages
+    sent.forEach((contact) => {
+        contact.messages.map((m) => m.sent = true);
+        contacts.push(contact._id.contact_name);
+        mergedConversations.push({
+          _id: { contact_name: contact._id.contact_name },
+          messages: contact.messages
         });
-      }
     });
-    received.forEach((conv) => {
-      conv.messages.map((m) => m.sent = false);
-      if (!contacts.includes(conv.contact)) {
-        contacts.push(conv.contact);
-        conversations.push({
-          contact: conv.contact,
-          messages: conv.messages
+    received.forEach((contact) => {
+      contact.messages.map((m) => m.sent = false);
+      if (!contacts.includes(contact._id.contact_name)) {
+        contacts.push(contact._id.contact_name);
+        mergedConversations.push({
+          _id: { contact_name: contact._id.contact_name },
+          messages: contact.messages
         });
       } else {
-        const foundConvo: Conversation = conversations.find((c) => c.contact === conv.contact) as Conversation;
-        foundConvo.messages.push(...conv.messages);
+        const foundConvo: Conversation = mergedConversations.find((c) => c._id.contact_name === contact._id.contact_name) as Conversation;
+        foundConvo.messages.push(...contact.messages);
       }
-    })
+    });
     
-    conversations.forEach((c) => {
+    mergedConversations.forEach((c) => {
       c.messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
     });
 
-    resolve(conversations);
+    resolve(mergedConversations);
   });
 }

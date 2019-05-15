@@ -37,7 +37,12 @@ export let getDayContacts = async (req: Request, res: Response) => {
 
   const contactQuery = [{
     $group: {
-      _id: { month: { $month: "$timestamp" }, day: { $dayOfMonth: "$timestamp" }, year: { $year: "$timestamp" }, contact_name: "$contact_name" },
+      _id: {
+        month: { $month: "$timestamp" }, day: { $dayOfMonth: "$timestamp" }, year: { $year: "$timestamp" },
+        contact_name: "$contact_name",
+        phone_number: "$phone_number",
+      },
+      sms_group: { $push: "$sms_body" },
       totalTexts: { $sum: 1 }
     }, 
   }, {
@@ -59,6 +64,7 @@ export let getDayContacts = async (req: Request, res: Response) => {
 
   sent = await new Promise((resolve) => {
     SentSMS.aggregate(contactQuery).exec((err, result) => {
+      console.log('Sent:', result[4]._id.contact_name, result[4].totalTexts, result[4].sms_group.length);
       parseResult(result).then((parsedResult) => {
         if (parsedResult.length <= 0) {
           return resolve([]);
@@ -74,6 +80,7 @@ export let getDayContacts = async (req: Request, res: Response) => {
 
   received = await new Promise((resolve) => {
     ReceivedSMS.aggregate(contactQuery).exec((err, result) => {
+      console.log('Received:', result[5]._id.contact_name, result[5].totalTexts, result[5].sms_group);
       parseResult(result).then((parsedResult: ChartCoords[]) => {
         if (parsedResult.length <= 0) {
           return resolve([]);
@@ -103,9 +110,10 @@ export let getDayContacts = async (req: Request, res: Response) => {
 async function parseResult(smsGroup: GroupedSMS[]): Promise<ChartCoords[]> {
   return new Promise((resolve) => {
     let coords: ChartCoords[] = [];
-    smsGroup.forEach((sms: GroupedSMS, index: number) => {
+    smsGroup.forEach((sms: GroupedSMS) => {
+      const contact = sms._id.contact_name === '' ? sms._id.phone_number : sms._id.contact_name;
       coords.push({
-        x: sms._id.contact_name as string,
+        x: contact as string,
         y: sms.totalTexts
       });
     });
@@ -132,15 +140,19 @@ async function mergeResults(sent: ChartCoords[], received: ChartCoords[]): Promi
     mergedArray.sort();
     mergedArray.forEach((item) => {
       item.values = [];
-      const sentFiltered = sent.filter((val) => val.x === item.contact)[0];
+      const sentFiltered = sent.filter((val) => val.x === item.contact);
+      let totalSent = 0;
+      sentFiltered.forEach((val) => totalSent += val.y);
       item.values.push({
         label: 'Sent',
-        value: sentFiltered ? sentFiltered.y : 0
+        value: totalSent
       });
-      const receivedFiltered = received.filter((val) => val.x === item.contact)[0];
+      const receivedFiltered = received.filter((val) => val.x === item.contact);
+      let totalReceived = 0;
+      receivedFiltered.forEach((val) => totalReceived += val.y);
       item.values.push({
         label: 'Received',
-        value: receivedFiltered ? receivedFiltered.y : 0
+        value: totalReceived
       });
     });
 

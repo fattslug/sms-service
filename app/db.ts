@@ -27,8 +27,11 @@ export interface GroupedSMS extends Document {
     month: number,
     day: number,
     year: number,
-    contact_name?: string
+    contact_name?: string,
+    phone_number?: string,
+    sms_group?: any
   },
+  phone_number?: string,
   totalTexts: number,
   from?: boolean,
   to?: boolean,
