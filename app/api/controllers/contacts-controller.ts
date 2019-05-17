@@ -28,9 +28,9 @@ export let getDayContacts = async (req: Request, res: Response) => {
   /**
  * GET /sms/contacts?month={monthID}&day={day}&year{year}
  */
-  const month = parseInt(req.query.month);
-  const day = parseInt(req.query.day);
-  const year = parseInt(req.query.year);
+  const { year, month, day } = req.query;
+
+  console.log(year, month, day);
 
   let sent: ChartCoords[];
   let received: ChartCoords[];
@@ -53,9 +53,9 @@ export let getDayContacts = async (req: Request, res: Response) => {
     }
   }, {
     $match: {
-      '_id.month': month,
-      '_id.year': year,
-      '_id.day': day
+      '_id.year': parseInt(year),
+      '_id.month': parseInt(month),
+      '_id.day': parseInt(day)
     }
   }];
 
@@ -64,7 +64,7 @@ export let getDayContacts = async (req: Request, res: Response) => {
 
   sent = await new Promise((resolve) => {
     SentSMS.aggregate(contactQuery).exec((err, result) => {
-      console.log('Sent:', result[4]._id.contact_name, result[4].totalTexts, result[4].sms_group.length);
+      console.log(err, result);
       parseResult(result).then((parsedResult) => {
         if (parsedResult.length <= 0) {
           return resolve([]);
@@ -80,7 +80,6 @@ export let getDayContacts = async (req: Request, res: Response) => {
 
   received = await new Promise((resolve) => {
     ReceivedSMS.aggregate(contactQuery).exec((err, result) => {
-      console.log('Received:', result[5]._id.contact_name, result[5].totalTexts, result[5].sms_group);
       parseResult(result).then((parsedResult: ChartCoords[]) => {
         if (parsedResult.length <= 0) {
           return resolve([]);

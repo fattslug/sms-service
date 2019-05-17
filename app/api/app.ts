@@ -8,9 +8,7 @@ import chalk from 'chalk';
 dotenv.config({ path: '.env' });
 
 // Controllers (route handlers)
-import * as smsController from './controllers/sms-controller';
 import * as contactsController from './controllers/contacts-controller';
-import * as conversationController from './controllers/conversation-controller';
 
 // Create Express server
 const app = express();
@@ -45,12 +43,9 @@ app.use(bodyParser.urlencoded({ extended: true }));
 /**
  * API routes.
  */
-app.get('/sms/month/:month', smsController.getMonthOverview);
-app.get('/sms/year/:year', smsController.getYearOverview);
-app.get('/sms/decade', smsController.getDecadeOverview);
+const messagesRoutes = require('./messages/messages.routes');
+app.use('/sms/messages', messagesRoutes);
 
 app.get('/sms/contacts', contactsController.getDayContacts);
-
-app.get('/sms/conversation', conversationController.getDayConversation);
 
 export default app;
