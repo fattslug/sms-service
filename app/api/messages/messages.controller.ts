@@ -3,8 +3,8 @@ import { Request, Response } from 'express';
 import { generateDetailedMessagesQuery, generateCountQuery } from './messages.queries';
 import * as helper from './messages.helper';
 import { ReceivedSMS, SentSMS } from './../../db';
-import { ErrorHandler } from './../error/error-handler.controller';
-import { Conversation, ChartCoords } from './messages.model';
+import { ErrorHandler } from '../shared/error/error-handler.controller';
+import { Conversation, MessageChartCoords } from './messages.model';
 
 const error = new ErrorHandler();
 
@@ -50,6 +50,12 @@ export const getDetailedMessages = async (req: Request, res: Response) => {
 
 /**
  * Get number of messages sent monthly/year/daily
+ * If YEAR is provided
+ * --> Group counts by MONTHS in Year
+ * If YEAR and MONTH is provided
+ * --> Group counts by DAYS in Month of Year
+ * If NOTHING is provided
+ * --> Group counts by YEAR
  * @param req 
  * @param res 
  */
@@ -59,8 +65,8 @@ export const getMessageCount = async (req: Request, res: Response) => {
 
   let date = helper.generateDate(year || null, month || null, day || null);
 
-  let sent: ChartCoords[];
-  let received: ChartCoords[];
+  let sent: MessageChartCoords[];
+  let received: MessageChartCoords[];
 
   let sentMaxY = 0;
   let sentMaxX = date;
@@ -76,7 +82,7 @@ export const getMessageCount = async (req: Request, res: Response) => {
         }
         sentMaxX = parsedResult[parsedResult.length-1].x;
         sentMaxY = 0;
-        parsedResult.forEach((dataPoint: ChartCoords) => {
+        parsedResult.forEach((dataPoint: MessageChartCoords) => {
           sentMaxY = dataPoint.y > sentMaxY ? dataPoint.y : sentMaxY;
         });
         return resolve(parsedResult);
@@ -87,13 +93,13 @@ export const getMessageCount = async (req: Request, res: Response) => {
   received = await new Promise((resolve) => {
     ReceivedSMS.aggregate(countQuery).exec((err, result) => {
       if (err) { return error.handle(res) }
-      helper.parseChartCoords(result).then((parsedResult: ChartCoords[]) => {
+      helper.parseChartCoords(result).then((parsedResult: MessageChartCoords[]) => {
         if (parsedResult.length <= 0) {
           return resolve([]);
         }
         receivedMaxX = parsedResult[parsedResult.length-1].x;
         receivedMaxY = 0;
-        parsedResult.forEach((dataPoint: ChartCoords) => {
+        parsedResult.forEach((dataPoint: MessageChartCoords) => {
           receivedMaxY = dataPoint.y > receivedMaxY ? dataPoint.y : receivedMaxY;
         });
         return resolve(parsedResult);

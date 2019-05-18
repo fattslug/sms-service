@@ -7,9 +7,6 @@ import chalk from 'chalk';
 
 dotenv.config({ path: '.env' });
 
-// Controllers (route handlers)
-import * as contactsController from './controllers/contacts-controller';
-
 // Create Express server
 const app = express();
 
@@ -46,6 +43,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 const messagesRoutes = require('./messages/messages.routes');
 app.use('/sms/messages', messagesRoutes);
 
-app.get('/sms/contacts', contactsController.getDayContacts);
+const contactsRoutes = require('./contacts/contacts.routes');
+app.use('/sms/contacts', contactsRoutes);
 
 export default app;

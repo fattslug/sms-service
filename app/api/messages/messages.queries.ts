@@ -1,4 +1,4 @@
-import { DateDeclaration, DateGrouping } from './messages.model';
+import { DateDeclaration, DateGrouping } from '../shared/models/date.models';
 
 export const generateDetailedMessagesQuery = (
   year: string | number,

@@ -7,6 +7,7 @@ import moment from 'moment-timezone';
 import * as log from './logger';
 
 import { dropCollection, SentSMS, ReceivedSMS, SMS } from './db';
+import { resolve } from 'bluebird';
 
 log.open();
 
@@ -17,7 +18,7 @@ const SCOPES = ['https://www.googleapis.com/auth/drive'];
 // time.
 const TOKEN_PATH = 'token.json';
 
-function resetEnv() {
+async function resetEnv(): Promise<any> {
   // Initial reset
   // Remove & create folders...
   // CSV Directory
@@ -55,18 +56,20 @@ function resetEnv() {
   }
 
   // Wipe database
-  dropCollection(SentSMS).then(() => {
+  await dropCollection(SentSMS).then(() => {
     log.write('Successfully dropped "sent" collection...');
   }).catch((err) => {
     console.log('Error dropping "sent" collection', err);
     log.write('Error dropping "sent" collection: ' + err);
   });
-  dropCollection(ReceivedSMS).then(() => {
+  await dropCollection(ReceivedSMS).then(() => {
     log.write('Successfully dropped "received" collection...');
   }).catch((err) => {
     console.log('Error dropping "received" collection', err);
     log.write('Error dropping "received" collection: ' + err);
   });
+
+  return;
 }
 
 
@@ -76,7 +79,7 @@ fs.readFile(__dirname + '/credentials.json', 'utf-8', (err, content) => {
   log.write('Reading Credentials...\n');
   if (err) return console.log('Error loading client secret file:', err);
   // Authorize a client with credentials, then call the Google Drive API.
-  authorize(JSON.parse(content), listFiles);
+  authorize(JSON.parse(content), importFiles);
 });
 
 /**
@@ -134,7 +137,7 @@ function getAccessToken(oAuth2Client: any, callback: any) {
  * Lists the names and IDs of up to 10 files.
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  */
-async function listFiles(auth: any) {
+async function importFiles(auth: any) {
   log.write('Successfully authenticated...');
   await resetEnv();
   log.write('Listing files from Google Drive...');
@@ -153,13 +156,22 @@ async function listFiles(auth: any) {
         console.error(err);
         callback(err)
       } else {
+        res.data.files = res.data.files.filter((f: drive_v3.Schema$File) => f.mimeType === 'application/vnd.google-apps.spreadsheet');
         log.write('Files to download: ' + res.data.files.length);
+        let finished = 0;
         res.data.files.forEach(function (file: drive_v3.Schema$File, index: number) {
-          console.log(file.name, file.id, file.mimeType);
-          log.write(file.name + ': ' + file.id + ' --- ' + file.mimeType);
-          setTimeout(() => {
+          // log.write(file.name + ': ' + file.id + ' --- ' + file.mimeType);
+          setTimeout(async () => {
             log.write('Downloading file number: ' + index);
-            downloadFile(file, auth);
+            downloadFile(file, auth, index).then(() => {
+              finished++;
+              console.log(`Status: ${finished} of ${res.data.files.length}`);
+              log.write(`Status: ${finished} of ${res.data.files.length}`);
+              if (finished === res.data.files.length) {
+                console.log('DONE!');
+                process.exit();
+              }
+            });
           }, 1000*index);
         });
         pageToken = res.nextPageToken;
@@ -180,26 +192,32 @@ async function listFiles(auth: any) {
 
 // Download file from Google Drive
 // No column titles attached
-function downloadFile(file: drive_v3.Schema$File, auth: any) {
-  log.write('Downloading file: ' + file.name);
-  const drive = google.drive({version: 'v3', auth});
-  drive.files.export({
-    fileId: file.id,
-    mimeType: 'text/csv'
-   }).then(content => {
-     const filename = __dirname + '/sms/csv/' + file.name + '-' + file.id + '.csv';
-     fs.writeFileSync(filename, content.data);
-     if (content.status !== 200) {
-       console.log(content.status, file.name);
-     }
-     convertToJson(filename);
-   }).catch(e => {
-     console.error('ERROR:', e);
-   });
+async function downloadFile(file: drive_v3.Schema$File, auth: any, fileIndex: number): Promise<any> {
+  log.write(`Downloading file: ${file.name} -- ${fileIndex}`);
+  return new Promise((resolve, reject) => {
+    const drive = google.drive({version: 'v3', auth});
+    drive.files.export({
+      fileId: file.id,
+      mimeType: 'text/csv'
+    }).then(async (content) => {
+      const filename = __dirname + `/sms/csv/${file.name}-${file.id}.csv`;
+      fs.writeFileSync(filename, content.data);
+      if (content.status !== 200) {
+        // console.log(content.status, file.name);
+        process.abort();
+      } else {
+        await convertToJson(filename, fileIndex);
+        resolve();
+      }
+    }).catch(e => {
+      console.error('ERROR -- From Drive:', file.name, e);
+      log.write(`ERROR -- From Drive: ${file.name} -- ${file.mimeType}`);
+    });
+  });
 }
 
 // Convert to JSON with appropriate named properties
-async function convertToJson(filename: string) {
+async function convertToJson(filename: string, fileIndex: number): Promise<any> {
   const jsonfilename = filename.split('csv').join('json');
   let jsonStream = fs.createWriteStream(jsonfilename);
 
@@ -217,7 +235,7 @@ async function convertToJson(filename: string) {
 
 // Runs for each JSON document
 // As opposed to full file at once
-function importToDB(filename: string, smsData: SMS) {
+async function importToDB(filename: string, smsData: SMS): Promise<any> {
   let smsDocument: SMS;
   let parsedDate = moment(moment(smsData.timestamp, 'MMMM DD, YYYY LT').toDate()).tz("America/New_York").toDate();
   smsData.timestamp = parsedDate;
@@ -228,12 +246,14 @@ function importToDB(filename: string, smsData: SMS) {
     smsDocument = new ReceivedSMS(smsData);
   }
 
-  smsDocument.save().then(insertedSMS => {
-    console.log('Successfully inserted:', smsData, filename);
-    log.write('Successfully inserted: ' + JSON.stringify(smsData));
-  }).catch(e => {
-    console.log('Error inserting:', smsData, filename, e);
-    log.write('Error inserting: ' + filename);
-    return process.exit();
-  });
+  return new Promise((resolve) => {
+    smsDocument.save().then(() => {
+      return resolve();
+    }).catch(e => {
+      console.log('Error inserting:', smsData, filename, e);
+      log.write('Error inserting: ' + filename);
+      return process.exit();
+    });
+  })
+
 }

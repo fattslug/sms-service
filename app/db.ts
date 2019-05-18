@@ -68,7 +68,7 @@ export const ReceivedSMS: Model<SMS> = model('ReceivedSMS', receivedSchema);
 
 export async function dropCollection(collection: Model<SMS>) {
   return new Promise((resolve, reject) => {
-    collection.remove({}, (err) => {
+    collection.deleteMany({}, (err) => {
       if (err) { return reject(err) }
       return resolve(true);
     });
