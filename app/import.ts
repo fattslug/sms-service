@@ -89,7 +89,7 @@ fs.readFile(__dirname + '/credentials.json', 'utf-8', (err, content) => {
  * @param {function} callback The callback to call with the authorized client.
  */
 function authorize(credentials: any, callback: any) {
-  const {client_secret, client_id, redirect_uris} = credentials.installed;
+  const {client_secret, client_id, redirect_uris} = credentials;
   const oAuth2Client = new google.auth.OAuth2(
       client_id, client_secret, redirect_uris[0]);
 
@@ -192,7 +192,7 @@ async function importFiles(auth: any) {
 
 // Download file from Google Drive
 // No column titles attached
-async function downloadFile(file: drive_v3.Schema$File, auth: any, fileIndex: number): Promise<any> {
+async function downloadFile(file: drive_v3.Schema$File, auth: any, fileIndex: number): Promise<void> {
   log.write(`Downloading file: ${file.name} -- ${fileIndex}`);
   return new Promise((resolve, reject) => {
     const drive = google.drive({version: 'v3', auth});
@@ -235,7 +235,7 @@ async function convertToJson(filename: string, fileIndex: number): Promise<any> 
 
 // Runs for each JSON document
 // As opposed to full file at once
-async function importToDB(filename: string, smsData: SMS): Promise<any> {
+async function importToDB(filename: string, smsData: SMS): Promise<void> {
   let smsDocument: SMS;
   let parsedDate = moment(moment(smsData.timestamp, 'MMMM DD, YYYY LT').toDate()).tz("America/New_York").toDate();
   smsData.timestamp = parsedDate;
